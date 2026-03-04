@@ -448,8 +448,29 @@ namespace FBExport
 				}
 				case SQL_BLOB:
 				{
-					// can not support export blob data, 
-					csv << nullptr;
+					if (field.sub_type == 1) {
+						// TEXT blob - read and export as string
+						auto blobId = reinterpret_cast<ISC_QUAD*>(valuePtr);
+						Firebird::AutoRelease<Firebird::IBlob> blob(m_att->openBlob(status, m_tra, blobId, 0, nullptr));
+						std::string blobData;
+						char segBuffer[4096];
+						unsigned int actualLen = 0;
+						int segResult;
+						while (
+							(segResult = blob->getSegment(status, sizeof(segBuffer), segBuffer, &actualLen)) == Firebird::IStatus::RESULT_OK
+							|| segResult == Firebird::IStatus::RESULT_SEGMENT
+						)
+						{
+							blobData.append(segBuffer, actualLen);
+						}
+						blob->close(status);
+						blob.release();
+						csv << blobData;
+					}
+					else {
+						// can not support export non-text blob data
+						csv << nullptr;
+					}
 					break;
 				}
 				case SQL_ARRAY:
